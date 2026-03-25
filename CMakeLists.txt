@@ -11,7 +11,7 @@ find_package(CUDAToolkit REQUIRED)
 
 add_library(twistor INTERFACE)
 
-target_compile_options(twistor INTERFACE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda> $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+target_compile_options(twistor INTERFACE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
 target_include_directories(twistor INTERFACE "include" ${GATL_INCLUDE_DIRS} ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 target_link_libraries(twistor INTERFACE cuda)
 
