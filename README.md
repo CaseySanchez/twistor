@@ -26,8 +26,19 @@ docker build -t twistor .
 
 ### Run
 
-To run the Docker container execute the following command (requires an NVIDIA GPU):
+To run the Docker container execute the following command:
 
 ```
-docker run --rm --gpus all -it twistor
+docker run --gpus all --rm -it -v $(pwd):/usr/local/src/twistor twistor
+```
+
+## CMake
+
+### Build
+
+To build the examples within the container execute the following command:
+
+```
+cmake -S . -B build -DBUILD_EXAMPLES=ON
+cmake --build build -j $(nproc)
 ```
