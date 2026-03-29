@@ -19,6 +19,8 @@
 #include "twistor/gatl/csta.hpp"
 #include "twistor/computation_info.hpp"
 
+#include "lattice.hpp"
+
 template <typename GaugeFieldFunctor>
 concept GaugeFieldFunctorConcept = requires(GaugeFieldFunctor const &gauge_field_functor, vector_t const &vector) {
     { gauge_field_functor(vector) } -> std::same_as<vector_t>;
@@ -28,20 +30,7 @@ class Holonomy
 {
     std::shared_ptr<thrust::cuda::stream> m_stream;
 
-    size_t m_t_size;
-    size_t m_x_size;
-    size_t m_y_size;
-    size_t m_z_size;
-
-    float m_t_min;
-    float m_x_min;
-    float m_y_min;
-    float m_z_min;
-
-    float m_t_max;
-    float m_x_max;
-    float m_y_max;
-    float m_z_max;
+    Lattice m_lattice;
 
     ComputationInfo m_info;
 
@@ -54,48 +43,15 @@ class Holonomy
 
 public:
     /**
-     * @brief Constructs a Holonomy object for the given lattice dimensions and physical domain.
+     * @brief Constructs a Holonomy object.
      * @param [in] stream CUDA stream used for all device allocations and kernel launches.
-     * @param [in] t_size Number of lattice sites along the t-axis.
-     * @param [in] x_size Number of lattice sites along the x-axis.
-     * @param [in] y_size Number of lattice sites along the y-axis.
-     * @param [in] z_size Number of lattice sites along the z-axis.
-     * @param [in] t_min Physical lower bound of the t-axis.
-     * @param [in] x_min Physical lower bound of the x-axis.
-     * @param [in] y_min Physical lower bound of the y-axis.
-     * @param [in] z_min Physical lower bound of the z-axis.
-     * @param [in] t_max Physical upper bound of the t-axis.
-     * @param [in] x_max Physical upper bound of the x-axis.
-     * @param [in] y_max Physical upper bound of the y-axis.
-     * @param [in] z_max Physical upper bound of the z-axis.
+     * @param [in] lattice Spacetime lattice over which to compute the holonomy.
      */
     Holonomy(
         std::shared_ptr<thrust::cuda::stream> const &stream,
-        size_t const t_size,
-        size_t const x_size,
-        size_t const y_size,
-        size_t const z_size,
-        float const t_min,
-        float const x_min,
-        float const y_min,
-        float const z_min,
-        float const t_max,
-        float const x_max,
-        float const y_max,
-        float const z_max) :
+        Lattice const &lattice) :
         m_stream { stream },
-        m_t_size { t_size },
-        m_x_size { x_size },
-        m_y_size { y_size },
-        m_z_size { z_size },
-        m_t_min { t_min },
-        m_x_min { x_min },
-        m_y_min { y_min },
-        m_z_min { z_min },
-        m_t_max { t_max },
-        m_x_max { x_max },
-        m_y_max { y_max },
-        m_z_max { z_max },
+        m_lattice { lattice },
         m_info { ComputationInfo::Success },
         m_holonomy_tx ( thrust::cuda::async_allocator<motor_t> { *stream } ),
         m_holonomy_xy ( thrust::cuda::async_allocator<motor_t> { *stream } ),
@@ -170,25 +126,25 @@ public:
     template <GaugeFieldFunctorConcept GaugeFieldFunctor>
     Holonomy &compute(GaugeFieldFunctor gauge_field_functor)
     {
-        size_t const t_size = m_t_size;
-        size_t const x_size = m_x_size;
-        size_t const y_size = m_y_size;
-        size_t const z_size = m_z_size;
+        size_t const t_size = m_lattice.t_size();
+        size_t const x_size = m_lattice.x_size();
+        size_t const y_size = m_lattice.y_size();
+        size_t const z_size = m_lattice.z_size();
 
-        float const t_min = m_t_min;
-        float const x_min = m_x_min;
-        float const y_min = m_y_min;
-        float const z_min = m_z_min;
+        float const t_min = m_lattice.t_min();
+        float const x_min = m_lattice.x_min();
+        float const y_min = m_lattice.y_min();
+        float const z_min = m_lattice.z_min();
 
-        float const t_max = m_t_max;
-        float const x_max = m_x_max;
-        float const y_max = m_y_max;
-        float const z_max = m_z_max;
+        float const t_max = m_lattice.t_max();
+        float const x_max = m_lattice.x_max();
+        float const y_max = m_lattice.y_max();
+        float const z_max = m_lattice.z_max();
 
-        float const t_step = (t_max - t_min) / static_cast<float>(t_size);
-        float const x_step = (x_max - x_min) / static_cast<float>(x_size);
-        float const y_step = (y_max - y_min) / static_cast<float>(y_size);
-        float const z_step = (z_max - z_min) / static_cast<float>(z_size);
+        float const t_step = m_lattice.t_step();
+        float const x_step = m_lattice.x_step();
+        float const y_step = m_lattice.y_step();
+        float const z_step = m_lattice.z_step();
 
         size_t const t_stride = x_size * y_size * z_size;
         size_t const x_stride = y_size * z_size;
@@ -306,12 +262,12 @@ public:
                 auto const site_gauge_x_z = exp(0.5 * (x_direction ^ gauge_field_functor(site_position_z)));
                 auto const site_gauge_z_x = exp(0.5 * (z_direction ^ gauge_field_functor(site_position_x)));
 
-                holonomy_tx_ptr[index] = site_gauge_t_0 * site_gauge_x_t * inv(site_gauge_t_x) * inv(site_gauge_x_0);
-                holonomy_xy_ptr[index] = site_gauge_x_0 * site_gauge_y_x * inv(site_gauge_x_y) * inv(site_gauge_y_0);
-                holonomy_yz_ptr[index] = site_gauge_y_0 * site_gauge_z_y * inv(site_gauge_y_z) * inv(site_gauge_z_0);
-                holonomy_zt_ptr[index] = site_gauge_z_0 * site_gauge_t_z * inv(site_gauge_z_t) * inv(site_gauge_t_0);
-                holonomy_ty_ptr[index] = site_gauge_t_0 * site_gauge_y_t * inv(site_gauge_t_y) * inv(site_gauge_y_0);
-                holonomy_xz_ptr[index] = site_gauge_x_0 * site_gauge_z_x * inv(site_gauge_x_z) * inv(site_gauge_z_0);
+                holonomy_tx_ptr[index] = unit(site_gauge_t_0 * site_gauge_x_t * inv(site_gauge_t_x) * inv(site_gauge_x_0));
+                holonomy_xy_ptr[index] = unit(site_gauge_x_0 * site_gauge_y_x * inv(site_gauge_x_y) * inv(site_gauge_y_0));
+                holonomy_yz_ptr[index] = unit(site_gauge_y_0 * site_gauge_z_y * inv(site_gauge_y_z) * inv(site_gauge_z_0));
+                holonomy_zt_ptr[index] = unit(site_gauge_z_0 * site_gauge_t_z * inv(site_gauge_z_t) * inv(site_gauge_t_0));
+                holonomy_ty_ptr[index] = unit(site_gauge_t_0 * site_gauge_y_t * inv(site_gauge_t_y) * inv(site_gauge_y_0));
+                holonomy_xz_ptr[index] = unit(site_gauge_x_0 * site_gauge_z_x * inv(site_gauge_x_z) * inv(site_gauge_z_0));
             }
         );
 

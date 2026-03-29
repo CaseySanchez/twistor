@@ -37,7 +37,7 @@ private:
     __device__ vector_t perturbation_field(vector_t const &vector) const
     {
         auto const perturbation_position = 0.5 * et + 0.5 * ex + 0.5 * ey + 0.5 * ez + c<0> * ep + c<0> * em;
-        auto const perturbation_field_strength = c<0> * et + c<0> * ex + c<0> * ey + c<0> * ez + -0.03 * ep + 0.03 * em;
+        auto const perturbation_field_strength = c<0> * et + c<0> * ex + c<0> * ey + c<0> * ez + -0.1 * ep + 0.1 * em;
 
         auto const difference = vector - perturbation_position;
         float const weight = 1.0 / ((difference | difference) + 1e-2);
@@ -56,16 +56,16 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Create a CUDA stream
+    // Create a CUDA stream object
 
     std::shared_ptr<thrust::cuda::stream> stream = std::make_shared<thrust::cuda::stream>();
 
-    // Compute the holonomy given the GaugeFieldFunctor
+    // Create a lattice object
 
-    size_t const t_size = 20;
-    size_t const x_size = 20;
-    size_t const y_size = 20;
-    size_t const z_size = 20;
+    size_t const t_size = 10;
+    size_t const x_size = 50;
+    size_t const y_size = 50;
+    size_t const z_size = 50;
 
     float const t_min = -1.0;
     float const x_min = -1.0;
@@ -77,7 +77,13 @@ int main(int argc, char **argv)
     float const y_max = 1.0;
     float const z_max = 1.0;
 
-    Holonomy holonomy(stream, t_size, x_size, y_size, z_size, t_min, x_min, y_min, z_min, t_max, x_max, y_max, z_max);
+    Lattice lattice(t_size, x_size, y_size, z_size, t_min, x_min, y_min, z_min, t_max, x_max, y_max, z_max);
+
+    // Create a holonomy object
+
+    Holonomy holonomy(stream, lattice);
+
+    // Compute the holonomy given the GaugeFieldFunctor
 
     if (holonomy.compute(GaugeFieldFunctor{}).info() != ComputationInfo::Success) {
         std::cout << "Failed to compute the holonomy." << std::endl;
